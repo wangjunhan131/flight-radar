@@ -92,6 +92,10 @@ if [ -n "$AAPT" ]; then
   "$AAPT" package -f -M AndroidManifest.xml -S res -A "$OUT/assets" \
     -I "$FRAMEWORK" -F "$OUT/flightradar-unsigned.apk"
   ( cd "$OUT" && "$AAPT" add flightradar-unsigned.apk classes.dex )
+  # aapt 不会把 resources.arsc 对齐到 4 字节，而 Android 11+ 对 targetSdk>=30 的包
+  # 强制要求 arsc 不压缩且 4 字节对齐，否则安装失败（MIUI 提示"安装包与系统不兼容"）
+  node repack.js "$OUT/flightradar-unsigned.apk" "$OUT/flightradar-aligned.apk"
+  mv "$OUT/flightradar-aligned.apk" "$OUT/flightradar-unsigned.apk"
 else
   node pack.js "$OUT/flightradar-unsigned.apk" --root "$OUT"
 fi

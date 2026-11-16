@@ -6,6 +6,11 @@
 
 ![icon](icon/icon-512.png)
 
+## 下载
+
+- **Android APK**（约 140 KB，minSdk 24）：[最新 Release](https://github.com/wangjunhan131/flight-radar/releases/latest) —— 手机上点 `flightradar.apk` 直接装。
+- 网页版：克隆后 `bash start.sh`，打开 `http://127.0.0.1:4173/`。
+
 ## 功能
 
 - **雷达盘**：距离圈 / 方位线 / 刻度 / 扫描线，纯 Canvas 绘制；7 档配色（绿、琥珀、青、红、冰白…），背景亮度与线条透明度可 0–100 任意调，最低可到纯黑。

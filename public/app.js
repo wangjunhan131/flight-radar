@@ -71,7 +71,7 @@ const theme = {
 }
 const THEME_KEY = 'fr.theme'
 // ★ 点星弹窗跳转的仓库（发版时改这里）
-const GITHUB_REPO = 'https://github.com/'
+const GITHUB_REPO = 'https://github.com/wangjunhan131/flight-radar'
 const STAR_KEY = 'fr.star'
 const STAR_MIN_LAUNCH = 3          // 打开满 3 次之后才开始考虑弹
 const STAR_AGAIN_MS = 7 * 24 * 3600 * 1000  // 点「我在用」后隔一周再问

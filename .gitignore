@@ -1,0 +1,20 @@
+# build outputs
+build/
+android/build/
+*.apk
+*.idsig
+dist/
+
+# signing material — never commit
+android/keystore/
+*.jks
+*.keystore
+*.jks.pass
+
+# local runtime files
+server.log
+.snapshot.json
+node_modules/
+
+# icon working files (keep the master icon + mipmaps)
+icon/_*.png

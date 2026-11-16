@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>FlightRadar · 航班雷达</title>
+<link rel="stylesheet" href="style.css">
+<script>
+// 兜底：脚本一旦抛错就把错误显示出来，而不是留一块黑屏（手机上看不到控制台）
+window.__frErrors = [];
+window.addEventListener('error', function (e) {
+  var msg = (e && e.message) || 'unknown error';
+  window.__frErrors.push(msg);
+  if (!document.body) return; // 还没进 body，等页面自己渲染
+  var box = document.getElementById('booterr');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'booterr';
+    box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#200;color:#ff6b6b;' +
+      'font:11px/1.4 monospace;padding:8px;max-height:40%;overflow:auto;border-top:1px solid #f44';
+    document.body.appendChild(box);
+  }
+  box.textContent = '页面脚本出错：' + msg;
+});
+window.addEventListener('unhandledrejection', function (e) {
+  var msg = (e && e.reason && (e.reason.message || String(e.reason))) || 'promise rejected';
+  window.__frErrors.push(msg);
+});
+</script>
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">
+      <span class="dot" id="liveDot"></span>
+      <h1>FLIGHT RADAR</h1>
+    </div>
+    <span class="where" id="where">定位中</span>
+    <button id="refreshLoc" class="wherebtn" title="重新定位（换城市后点这个）">⌖ 定位</button>
+    <button id="srcbtn" class="wherebtn" title="数据源：查看每个源的健康状态、开关、加自定义源">◉ 数据源</button>
+  </header>
+
+  <div id="rangebar">
+    <button data-km="5">5</button>
+    <button data-km="10">10</button>
+    <button data-km="30">30</button>
+    <button data-km="70">70</button>
+    <button data-km="120" class="on">120</button>
+    <button data-km="200">200</button>
+    <button data-km="400">400</button>
+    <button data-km="500">500</button>
+    <button data-km="700">700</button>
+    <button data-km="1000">1k</button>
+    <button data-km="1500">1.5k</button>
+    <button data-km="2000">2k</button>
+    <span class="unit">km</span>
+  </div>
+
+  <main id="stage">
+    <canvas id="radar"></canvas>
+
+    <div id="readout">
+      <div><span>目标</span><b id="roCount">0</b></div>
+      <div><span>量程</span><b id="roRange">120km</b></div>
+      <div><span>刷新</span><b id="roTime">--:--:--</b></div>
+    </div>
+
+    <div id="filterbar">
+      <button data-f="all" class="on">全部</button>
+      <button data-f="air">民航</button>
+      <button data-f="small">通航/小型</button>
+      <button data-f="rotor">旋翼</button>
+      <button data-f="ground">地面</button>
+    </div>
+
+    <div id="viewbar">
+      <button data-v="radar" class="on">纯雷达</button>
+      <button data-v="map">地图</button>
+      <button data-v="sat">卫星</button>
+    </div>
+
+    <!-- 显示设置：亮度/线条/配色/地图层开关 -->
+    <div id="themebar">
+      <button id="themebtn" aria-label="显示设置">☀</button>
+      <div id="themepanel" class="hidden">
+        <div class="tp-colors" id="colorRow">
+          <button data-color="green" class="c-green on">绿</button>
+          <button data-color="amber" class="c-amber">琥珀</button>
+          <button data-color="cyan" class="c-cyan">青</button>
+          <button data-color="red" class="c-red">红</button>
+          <button data-color="white" class="c-white">冰白</button>
+        </div>
+        <div class="tp-row">
+          <span class="tp-label">背景</span>
+          <input id="brightness" type="range" min="0" max="100" step="5" value="30">
+          <b id="brightVal">30</b>
+        </div>
+        <div class="tp-row">
+          <span class="tp-label">线条</span>
+          <input id="gridOpacity" type="range" min="0" max="100" step="5" value="100">
+          <b id="gridVal">100</b>
+        </div>
+        <div class="tp-presets">
+          <button data-preset="black">全黑</button>
+          <button data-preset="dark">深</button>
+          <button data-preset="mid">中</button>
+          <button data-preset="light">浅</button>
+          <button data-preset="map">看地图</button>
+        </div>
+        <div class="tp-sep">屏幕效果</div>
+        <div class="tp-toggles">
+          <button id="tgScan" class="tg on">横条纹</button>
+          <button id="tgSweep" class="tg on">扫描线</button>
+          <button id="tgTail" class="tg">扫掠尾迹</button>
+          <button id="tgHeading" class="tg">朝向向上</button>
+        </div>
+        <div class="tp-sep">地图 / 卫星图层</div>
+        <div class="tp-toggles">
+          <button id="tgMapBg" class="tg">背景色</button>
+          <button id="tgMapGrid" class="tg on">标尺线</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据源面板：每个源的开关 / 健康状态 / 自定义源 -->
+    <div id="srcpanel" class="srcpanel hidden">
+      <div class="sp-head"><b>数据源</b><button id="srcClose" class="sp-x" aria-label="关闭">✕</button></div>
+      <div class="sp-note">多个源会合并去重；点右侧开关可临时停用某个源（比如被限流时）。</div>
+      <div id="srcList" class="sp-list"></div>
+      <div class="sp-sep">接入自定义源</div>
+      <div class="sp-form">
+        <input id="csName" placeholder="名称，如 my-api" autocomplete="off" spellcheck="false">
+        <input id="csUrl" placeholder="https://…/{lat}/{lon}/{radius}" autocomplete="off" spellcheck="false">
+        <button id="csAdd">添加</button>
+      </div>
+      <div class="sp-note">地址里可用 {lat} {lon} {radius}（海里）{radiusKm}；返回 JSON 含 ac / aircraft / data 数组即可，字段名兼容 adsb.lol。域名需在代理白名单里。</div>
+    </div>
+
+    <button id="cleanbtn" class="cleanbtn" title="隐藏/显示界面">▣</button>
+    <div id="hint" class="hint">点击目标锁定</div>
+    <div id="status" class="status hidden"></div>
+  </main>
+
+  <!-- 点星提示：用了一段时间后出现；点「去点星星」后不再出现，点「在用」则一周后再问 -->
+  <div id="starmodal" class="starmodal hidden" role="dialog" aria-labelledby="starTitle">
+    <div class="star-box">
+      <div class="star-glyph">★</div>
+      <h2 id="starTitle">用得怎么样？</h2>
+      <p class="star-text">可以给我点个星星吗？这个雷达是完全免费开源的，一颗星就是最大的鼓励。</p>
+      <a id="starGo" class="star-go" href="https://github.com/" target="_blank" rel="noopener">去点星星</a>
+      <button id="starLater" class="star-later">我在用</button>
+    </div>
+  </div>
+
+  <section id="sheet" class="hidden" aria-live="polite">
+    <div class="sheet-grab"></div>
+    <button class="sheet-close" id="sheetClose" aria-label="解锁">✕</button>
+
+    <div class="flight-head">
+      <div class="fh-left">
+        <div class="fh-callsign" id="fCallsign">—</div>
+        <div class="fh-sub" id="fSub">—</div>
+      </div>
+      <div class="fh-right">
+        <div class="fh-iata" id="fIata">—</div>
+        <div class="fh-status" id="fAltState">—</div>
+      </div>
+    </div>
+
+    <div class="route" id="fRoute">
+      <div class="route-end">
+        <div class="r-code" id="fOrig">—</div>
+        <div class="r-name" id="fOrigName"></div>
+      </div>
+      <div class="route-line">
+        <div class="rl-bar"><span id="rlProgress"></span></div>
+      </div>
+      <div class="route-end right">
+        <div class="r-code" id="fDest">—</div>
+        <div class="r-name" id="fDestName"></div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><span>高度</span><b id="sAlt">—</b></div>
+      <div class="stat"><span>地速</span><b id="sGs">—</b></div>
+      <div class="stat"><span>航向</span><b id="sHdg">—</b></div>
+      <div class="stat"><span>升降</span><b id="sVs">—</b></div>
+      <div class="stat"><span>距离</span><b id="sDist">—</b></div>
+      <div class="stat"><span>方位</span><b id="sBrg">—</b></div>
+    </div>
+
+    <div class="meta">
+      <div><span>机型</span><b id="mType">—</b></div>
+      <div><span>注册号</span><b id="mReg">—</b></div>
+      <div><span>应答机</span><b id="mSqk">—</b></div>
+      <div><span>ICAO</span><b id="mHex">—</b></div>
+    </div>
+    <div class="srcrow"><span>数据源</span><b id="mSrc">—</b></div>
+  </section>
+</div>
+<script src="providers.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
